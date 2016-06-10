@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://ws.apache.org/ns/synapse">
+    <registry provider="org.wso2.carbon.mediation.registry.WSO2Registry">
+        <parameter name="cachableDuration">15000</parameter>
+    </registry>
+    <taskManager provider="org.wso2.carbon.mediation.ntask.NTaskTaskManager"/>
+    <proxy name="LocationRetrieveJMSConsumerProxy" startOnLoad="true"
+        trace="disable" transports="jms">
+        <description>Consumes Message From a Queue and Publishes to a MQTT Topic</description>
+        <target>
+            <inSequence>
+                <log level="full"/>
+                <send>
+                    <endpoint>
+                        <address uri="mqtt:/LocationTrackerTopic?mqtt.server.host.name=localhost&amp;mqtt.server.port=1883&amp;mqtt.client.id=esb.test.sender&amp;mqtt.topic.name=LocationTrackerTopic&amp;mqtt.subscription.qos=0&amp;mqtt.blocking.sender=true"/>
+                    </endpoint>
+                </send>
+            </inSequence>
+        </target>
+        <parameter name="transport.jms.Destination">LocationQueue</parameter>
+        <parameter name="transport.jms.ContentType">
+            <rules>
+                <jmsProperty>contentType</jmsProperty>
+                <default>application/json</default>
+            </rules>
+        </parameter>
+    </proxy>
+    <sequence name="fault">
+        <!-- Log the message at the full log level with the ERROR_MESSAGE and the ERROR_CODE-->
+        <log level="full">
+            <property name="MESSAGE" value="Executing default 'fault' sequence"/>
+            <property expression="get-property('ERROR_CODE')" name="ERROR_CODE"/>
+            <property expression="get-property('ERROR_MESSAGE')" name="ERROR_MESSAGE"/>
+        </log>
+        <!-- Drops the messages by default if there is a fault -->
+        <drop/>
+    </sequence>
+    <sequence name="main">
+        <in>
+            <!-- Log all messages passing through -->
+            <log level="full"/>
+            <!-- ensure that the default configuration only sends if it is one of samples -->
+            <!-- Otherwise Synapse would be an open proxy by default (BAD!)               -->
+            <filter regex="http://localhost:9000.*" source="get-property('To')">
+                <!-- Send the messages where they have been sent (i.e. implicit "To" EPR) -->
+                <send/>
+            </filter>
+        </in>
+        <out>
+            <send/>
+        </out>
+        <description>The main sequence for the message mediation</description>
+    </sequence>
+</definitions>
